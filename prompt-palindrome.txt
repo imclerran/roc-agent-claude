@@ -1,0 +1,22 @@
+Add a longest palindromic substring function to this Roc code, add tests using `expect`.
+That function should do the following:
+Given a string s, find the longest palindromic substring in s. A palindrome is a string that reads the same backward as forward.
+
+Roc instructions:
+- Do not use `Nat`, use a type like `U64` or `I64` instead.
+- Roc does not use `head :: tail`, use `[head, .. as tail]` instead. Make sure you do not forget the `as`!
+- Functions are defined like this: `increment = \n -> n + 1` 
+
+Extra instructions:
+- If the user provides you with an error, start your reply with an analysis of what could be going wrong paired with potential solutions. There is no need to provide an explanation after the code block.
+
+```
+app [main] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br" }
+
+import pf.Stdout
+
+main =
+    Stdout.line! "Hello, World!"
+
+expect 5 == 5
+```
