@@ -1,0 +1,7 @@
+### Do not modify these first three ignore rules. Needed to ignore (binary) files with no extension ###
+# Ignore all files including binary files that have no extension
+*
+# Unignore all files with extensions
+!*.*
+# Unignore all directories
+!*/
