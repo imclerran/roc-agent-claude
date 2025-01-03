@@ -36,7 +36,10 @@ jobs:
       - name: simplify nightly folder name
         run: mv roc_nightly* roc_nightly
 
-      - run: ./roc_nightly/roc version
+      - name: Add roc_nightly to PATH
+        run: echo "${{ github.workspace }}/roc_nightly" >> $GITHUB_PATH
+
+      - run: roc version
 
       # run all tests 
       - name: Run tests
