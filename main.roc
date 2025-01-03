@@ -16,14 +16,23 @@ import pf.File
 
 import "prompt-palindrome.txt" as promptText : Str
 
+# Output of `roc test` and `roc check` gets written to this file
 cmdOutputFile = "last_cmd_output.txt"
 
+# Claude will write to this file and execute `roc check` and `roc test` on it
 claudeRocFile = "main_claude.roc"
+claudeMaxRequests = 8
+# Choose between:
+# - smartest, expensive: "claude-3-5-sonnet-20241022"
+# - decent, cheap, fast: "claude-3-5-haiku-20241022"
+claudeModel = "claude-3-5-sonnet-20241022"
+
+httpRequestTimeout = 5*60*1000
 
 main! = \_args ->
     try rocVersionCheck! {}
 
-    try loopClaude! 8 promptText []
+    try loopClaude! claudeMaxRequests promptText []
 
     Ok {}
 
@@ -81,6 +90,80 @@ loopClaude! = \remainingClaudeCalls, prompt, previousMessages ->
         Err e ->
             Err (ExtractMarkdownCodeBlockFailed (Inspect.toStr e))
 
+askClaude! : Str, List {role: Str, content: Str} => Result Str _
+askClaude! = \prompt, previousMessages ->
+    escapedPrompt = escapeStr prompt
+
+    escapedPreviousMessages =
+        List.map previousMessages \message ->
+            { message & content: escapeStr message.content}
+
+    apiKey =
+            Env.decode! "ANTHROPIC_API_KEY"
+            |> Result.mapErr \_ -> FailedToGetAPIKeyFromEnvVar
+            |> try
+
+    messagesToSend =
+        List.append escapedPreviousMessages {role: "user", content: "$(escapedPrompt)"}
+        |> messagesToStr
+
+    request = {
+        method: Post,
+        headers: [
+            {name: "x-api-key", value: apiKey},
+            {name: "anthropic-version", value: "2023-06-01"},
+            {name: "content-type", value: "application/json"},
+        ],
+        uri: "https://api.anthropic.com/v1/messages",
+        body: Str.toUtf8
+            """
+            {
+                "model": "$(claudeModel)",
+                "max_tokens": 8192,
+                "messages": $(messagesToSend)
+            }
+            """,
+        timeout_ms: TimeoutMilliseconds httpRequestTimeout,
+    }
+
+    response =
+        Http.send! request
+
+    responseBody =
+        Str.fromUtf8 response.body
+
+    when responseBody is
+        Ok replyBody ->
+            jsonDecoder = Json.utf8With { fieldNameMapping: SnakeCase }
+
+            decoded : DecodeResult ClaudeReply
+            decoded = fromBytesPartial (Str.toUtf8 replyBody) jsonDecoder
+
+            when decoded.result is
+                Ok claudeReply -> 
+                    when List.first claudeReply.content is
+                        Ok firstContentElt -> Ok firstContentElt.text
+                        Err _ -> Err ClaudeReplyContentJsonFieldWasEmptyList
+
+                Err e -> Err (ClaudeJsonDecodeFailed "Error:\n\tFailed to decode claude API reply into json: $(Inspect.toStr e)\n\n\tbody:\n\t\t$(replyBody)")
+
+        Err err ->
+            Err (ClaudeHTTPSendFailed err)
+
+ClaudeReply : {
+    id : Str,
+    type : Str,
+    role : Str,
+    model : Str,
+    content : List { type : Str, text : Str },
+    stopReason : Str,
+    stopSequence : Option Str,
+    usage : {
+        inputTokens : U64,
+        outputTokens : U64,
+    }
+}
+
 retry! = \remainingClaudeCalls, previousMessages, oldPrompt, claudeAnswer, newPrompt ->
     if remainingClaudeCalls > 0 then
         newPreviousMessages = List.concat previousMessages [{role: "user", content: oldPrompt}, {role: "assistant", content: claudeAnswer}]
@@ -88,13 +171,6 @@ retry! = \remainingClaudeCalls, previousMessages, oldPrompt, claudeAnswer, newPr
         loopClaude! (remainingClaudeCalls - 1) newPrompt newPreviousMessages
     else
         Err ReachedMaxClaudeCalls
-
-rocVersionCheck! : {} => Result {} _
-rocVersionCheck! = \{} ->
-    try info! "Checking if roc command is available; executing `roc version`:" 
-
-    Cmd.exec! "roc" ["version"]
-    |> Result.mapErr RocVersionCheckFailed
 
 executeRocCheck! = \{} ->
     bashCmd =
@@ -121,6 +197,16 @@ executeRocTest! = \{} ->
         Err (StripColorCodesFailedWithExitCode cmd_exit_code)
     else
         Ok {}
+
+
+# HELPERS
+
+rocVersionCheck! : {} => Result {} _
+rocVersionCheck! = \{} ->
+    try info! "Checking if roc command is available; executing `roc version`:" 
+
+    Cmd.exec! "roc" ["version"]
+    |> Result.mapErr RocVersionCheckFailed
 
 stripColorCodes! = \{} ->
     bashCmd =
@@ -152,68 +238,6 @@ removeFirstLine = \str ->
     |> List.dropFirst 1
     |> Str.joinWith "\n"
 
-
-askClaude! : Str, List {role: Str, content: Str} => Result Str _
-askClaude! = \prompt, previousMessages ->
-    escapedPrompt = escapeStr prompt
-
-    escapedPreviousMessages =
-        List.map previousMessages \message ->
-            { message & content: escapeStr message.content}
-
-    apiKey =
-            Env.decode! "ANTHROPIC_API_KEY"
-            |> Result.mapErr \_ -> FailedToGetAPIKeyFromEnvVar
-            |> try
-
-    messagesToSend =
-        List.append escapedPreviousMessages {role: "user", content: "$(escapedPrompt)"}
-        |> messagesToStr
-
-    request = {
-        method: Post,
-        headers: [
-            {name: "x-api-key", value: apiKey},
-            {name: "anthropic-version", value: "2023-06-01"},
-            {name: "content-type", value: "application/json"},
-        ],
-        uri: "https://api.anthropic.com/v1/messages",
-        # models "claude-3-5-sonnet-20241022" "claude-3-5-haiku-20241022"
-        body: Str.toUtf8
-            """
-            {
-                "model": "claude-3-5-sonnet-20241022",
-                "max_tokens": 8192,
-                "messages": $(messagesToSend)
-            }
-            """,
-        timeout_ms: TimeoutMilliseconds (5*60*1000),
-    }
-
-    response =
-        Http.send! request
-
-    responseBody =
-        Str.fromUtf8 response.body
-
-    when responseBody is
-        Ok replyBody ->
-            jsonDecoder = Json.utf8With { fieldNameMapping: SnakeCase }
-
-            decoded : DecodeResult ClaudeReply
-            decoded = fromBytesPartial (Str.toUtf8 replyBody) jsonDecoder
-
-            when decoded.result is
-                Ok claudeReply -> 
-                    when List.first claudeReply.content is
-                        Ok firstContentElt -> Ok firstContentElt.text
-                        Err _ -> Err ClaudeReplyContentJsonFieldWasEmptyList
-
-                Err e -> Err (ClaudeJsonDecodeFailed "Error:\n\tFailed to decode claude API reply into json: $(Inspect.toStr e)\n\n\tbody:\n\t\t$(replyBody)")
-
-        Err err ->
-            Err (ClaudeHTTPSendFailed err)
-
 messagesToStr : List {role: Str, content: Str} -> Str
 messagesToStr = \messages ->
     messagesStr =
@@ -223,19 +247,6 @@ messagesToStr = \messages ->
 
     """[$(messagesStr)]"""
 
-ClaudeReply : {
-    id : Str,
-    type : Str,
-    role : Str,
-    model : Str,
-    content : List { type : Str, text : Str },
-    stopReason : Str,
-    stopSequence : Option Str,
-    usage : {
-        inputTokens : U64,
-        outputTokens : U64,
-    }
-}
 
 info! = \msg ->
     Stdout.line! "\u(001b)[34mINFO:\u(001b)[0m $(msg)"
