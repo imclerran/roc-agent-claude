@@ -13,7 +13,6 @@ import Decode exposing [fromBytesPartial]
 import pf.Cmd
 import pf.File
 
-
 import "prompt-palindrome.txt" as promptText : Str
 
 # Output of `roc test` and `roc check` gets written to this file
@@ -27,7 +26,7 @@ claudeMaxRequests = 8
 # - decent, cheap, fast: "claude-3-5-haiku-20241022"
 claudeModel = "claude-3-5-sonnet-20241022"
 
-httpRequestTimeout = 5*60*1000
+httpRequestTimeout = 5 * 60 * 1000
 
 main! = \_args ->
     try rocVersionCheck! {}
@@ -72,13 +71,14 @@ loopClaude! = \remainingClaudeCalls, prompt, previousMessages ->
                             try Stdout.line! "\n$(Inspect.toStr testOutput)\n\n"
 
                             Ok {}
-                        
+
                         Err e ->
                             try info! "`roc test` failed.\n"
 
                             try Stderr.line! (Inspect.toStr e)
 
                             retry! remainingClaudeCalls previousMessages prompt claudeAnswer testOutput
+
                 Err e ->
                     try info! "`roc check` failed.\n"
 
@@ -86,33 +86,32 @@ loopClaude! = \remainingClaudeCalls, prompt, previousMessages ->
 
                     retry! remainingClaudeCalls previousMessages prompt claudeAnswer checkOutput
 
-
         Err e ->
             Err (ExtractMarkdownCodeBlockFailed (Inspect.toStr e))
 
-askClaude! : Str, List {role: Str, content: Str} => Result Str _
+askClaude! : Str, List { role : Str, content : Str } => Result Str _
 askClaude! = \prompt, previousMessages ->
     escapedPrompt = escapeStr prompt
 
     escapedPreviousMessages =
         List.map previousMessages \message ->
-            { message & content: escapeStr message.content}
+            { message & content: escapeStr message.content }
 
     apiKey =
-            Env.decode! "ANTHROPIC_API_KEY"
-            |> Result.mapErr \_ -> FailedToGetAPIKeyFromEnvVar
-            |> try
+        Env.decode! "ANTHROPIC_API_KEY"
+        |> Result.mapErr \_ -> FailedToGetAPIKeyFromEnvVar
+        |> try
 
     messagesToSend =
-        List.append escapedPreviousMessages {role: "user", content: "$(escapedPrompt)"}
+        List.append escapedPreviousMessages { role: "user", content: "$(escapedPrompt)" }
         |> messagesToStr
 
     request = {
         method: Post,
         headers: [
-            {name: "x-api-key", value: apiKey},
-            {name: "anthropic-version", value: "2023-06-01"},
-            {name: "content-type", value: "application/json"},
+            { name: "x-api-key", value: apiKey },
+            { name: "anthropic-version", value: "2023-06-01" },
+            { name: "content-type", value: "application/json" },
         ],
         uri: "https://api.anthropic.com/v1/messages",
         body: Str.toUtf8
@@ -140,7 +139,7 @@ askClaude! = \prompt, previousMessages ->
             decoded = fromBytesPartial (Str.toUtf8 replyBody) jsonDecoder
 
             when decoded.result is
-                Ok claudeReply -> 
+                Ok claudeReply ->
                     when List.first claudeReply.content is
                         Ok firstContentElt -> Ok firstContentElt.text
                         Err _ -> Err ClaudeReplyContentJsonFieldWasEmptyList
@@ -161,12 +160,12 @@ ClaudeReply : {
     usage : {
         inputTokens : U64,
         outputTokens : U64,
-    }
+    },
 }
 
 retry! = \remainingClaudeCalls, previousMessages, oldPrompt, claudeAnswer, newPrompt ->
     if remainingClaudeCalls > 0 then
-        newPreviousMessages = List.concat previousMessages [{role: "user", content: oldPrompt}, {role: "assistant", content: claudeAnswer}]
+        newPreviousMessages = List.concat previousMessages [{ role: "user", content: oldPrompt }, { role: "assistant", content: claudeAnswer }]
 
         loopClaude! (remainingClaudeCalls - 1) newPrompt newPreviousMessages
     else
@@ -176,8 +175,8 @@ executeRocCheck! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "-c"
-        |> Cmd.arg """roc check main_claude.roc > last_cmd_output.txt 2>&1"""
-    
+        |> Cmd.arg "roc check main_claude.roc > last_cmd_output.txt 2>&1"
+
     cmd_exit_code = try Cmd.status! bashCmd
 
     if cmd_exit_code != 0 then
@@ -189,8 +188,11 @@ executeRocTest! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "-c"
-        |> Cmd.arg """(timeout 2m roc test main_claude.roc > last_cmd_output.txt 2>&1 || { ret=$?; if [ $ret -eq 124 ]; then echo "'roc test' timed out after two minutes!" >> last_cmd_output.txt; fi; exit $ret; })"""
-    
+        |> Cmd.arg
+            """
+            (timeout 2m roc test main_claude.roc > last_cmd_output.txt 2>&1 || { ret=$?; if [ $ret -eq 124 ]; then echo "'roc test' timed out after two minutes!" >> last_cmd_output.txt; fi; exit $ret; })
+            """
+
     cmd_exit_code = try Cmd.status! bashCmd
 
     if cmd_exit_code != 0 then
@@ -198,12 +200,11 @@ executeRocTest! = \{} ->
     else
         Ok {}
 
-
 # HELPERS
 
 rocVersionCheck! : {} => Result {} _
 rocVersionCheck! = \{} ->
-    try info! "Checking if roc command is available; executing `roc version`:" 
+    try info! "Checking if roc command is available; executing `roc version`:"
 
     Cmd.exec! "roc" ["version"]
     |> Result.mapErr RocVersionCheckFailed
@@ -212,7 +213,7 @@ stripColorCodes! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "removeColorCodes.sh"
-    
+
     cmd_exit_code = try Cmd.status! bashCmd
 
     if cmd_exit_code != 0 then
@@ -238,15 +239,18 @@ removeFirstLine = \str ->
     |> List.dropFirst 1
     |> Str.joinWith "\n"
 
-messagesToStr : List {role: Str, content: Str} -> Str
+messagesToStr : List { role : Str, content : Str } -> Str
 messagesToStr = \messages ->
     messagesStr =
         List.map messages \message ->
-            """{"role": "$(message.role)", "content": "$(message.content)"}"""
+            """
+            {"role": "$(message.role)", "content": "$(message.content)"}
+            """
         |> Str.joinWith ", "
 
-    """[$(messagesStr)]"""
-
+    """
+    [$(messagesStr)]
+    """
 
 info! = \msg ->
     Stdout.line! "\u(001b)[34mINFO:\u(001b)[0m $(msg)"
@@ -258,4 +262,3 @@ escapeStr = \str ->
     |> Str.replaceEach "\t" "\\t"
     |> Str.replaceEach "\"" "\\\""
 
-    
