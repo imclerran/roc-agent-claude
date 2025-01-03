@@ -5,3 +5,9 @@
 !*.*
 # Unignore all directories
 !*/
+
+# File used by Claude
+main_claude.roc
+
+# Used to store output of commands
+last_cmd_output.txt

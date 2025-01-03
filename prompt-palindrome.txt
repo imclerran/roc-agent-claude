@@ -1,16 +1,227 @@
+We're going solve a programming puzzle in Roc.
+
+These are the functions you can use:
+```roc
+Bool.false : Bool
+Bool.true : Bool
+Decode.fromBytesPartial : List U8, fmt -> DecodeResult val where val implements Decoding, fmt implements DecoderFormatting
+Dict.empty : {} -> Dict * *
+Dict.fromList : List (k, v) -> Dict k v
+Dict.get : Dict k v, k -> Result v [KeyNotFound]
+Dict.insert : Dict k v, k, v -> Dict k v
+Dict.insertAll : Dict k v, Dict k v -> Dict k v
+Dict.joinMap : Dict a b, (a, b -> Dict x y) -> Dict x y
+Dict.keys : Dict k v -> List k
+Dict.map : Dict k a, (k, a -> b) -> Dict k b
+Dict.remove : Dict k v, k -> Dict k v
+Dict.single : k, v -> Dict k v
+Dict.toList : Dict k v -> List (k, v)
+Dict.update : Dict k v, k, (Result v [Missing] -> Result v [Missing]) -> Dict k v
+Dict.walk : Dict k v, state, (state, k, v -> state) -> state
+Encode.toBytes : val, fmt -> List U8 where val implements Encoding, fmt implements EncoderFormatting
+List.all : List a, (a -> Bool) -> Bool
+List.any : List a, (a -> Bool) -> Bool
+List.append : List a, a -> List a
+List.chunksOf : List a, U64 -> List (List a)
+List.concat : List a, List a -> List a
+List.contains : List a, a -> Bool where a implements Eq
+List.dropAt : List elem, U64 -> List elem
+List.dropFirst : List elem, U64 -> List elem
+List.dropIf : List a, (a -> Bool) -> List a
+List.dropLast : List elem, U64 -> List elem
+List.findFirst : List elem, (elem -> Bool) -> Result elem [NotFound]
+List.findFirstIndex : List elem, (elem -> Bool) -> Result U64 [NotFound]
+List.findLastIndex : List elem, (elem -> Bool) -> Result U64 [NotFound]
+List.first : List a -> Result a [ListWasEmpty]
+List.get : List a, U64 -> Result a [OutOfBounds]
+List.intersperse : List elem, elem -> List elem
+List.isEmpty : List * -> Bool
+List.join : List (List a) -> List a
+List.joinMap : List a, (a -> List b) -> List b
+List.keepIf : List a, (a -> Bool) -> List a
+List.keepOks : List before, (before -> Result after *) -> List after
+List.last : List a -> Result a [ListWasEmpty]
+List.len : List * -> U64
+List.map : List a, (a -> b) -> List b
+List.map2 : List a, List b, (a, b -> c) -> List c
+List.mapTry : List elem, (elem -> Result ok err) -> Result (List ok) err
+List.mapWithIndex : List a, (a, U64 -> b) -> List b
+List.max : List (Num a) -> Result (Num a) [ListWasEmpty]
+List.min : List (Num a) -> Result (Num a) [ListWasEmpty]
+List.range : { end : [At (Num a), Before (Num a), Length U64], start : [After (Num a), At (Num a)], step ? Num a }* -> List (Num a)
+List.repeat : a, U64 -> List a
+List.replace : List a, U64, a -> { list : List a, value : a }
+List.reverse : List a -> List a
+List.sortAsc : List (Num a) -> List (Num a)
+List.sortDesc : List (Num a) -> List (Num a)
+List.sortWith : List a, (a, a -> [LT, EQ, GT]) -> List a
+List.splitAt : List elem, U64 -> { before : List elem, others : List elem }
+List.splitOn : List a, a -> List (List a) where a implements Eq
+List.sublist : List elem, { start : U64, len : U64 } -> List elem
+List.sum : List (Num a) -> Num a
+List.swap : List a, U64, U64 -> List a
+List.takeFirst : List elem, U64 -> List elem
+List.takeLast : List elem, U64 -> List elem
+List.update : List a, U64, (a -> a) -> List a
+List.walk : List elem, state, (state, elem -> state) -> state
+List.walkBackwards : List elem, state, (state, elem -> state) -> state
+List.walkTry : List elem, state, (state, elem -> Result state err) -> Result state err
+List.walkUntil : List elem, state, (state, elem -> [Continue state, Break state]) -> state
+List.walkWithIndex : List elem, state, (state, elem, U64 -> state) -> state
+List.walkWithIndexUntil : List elem, state, (state, elem, U64 -> [Continue state, Break state]) -> state
+List.withCapacity : U64 -> List *
+Num.abs : Num a -> Num a
+Num.add : Num a, Num a -> Num a
+Num.addChecked : Num a, Num a -> Result (Num a) [Overflow]
+Num.bitwiseAnd : Int a, Int a -> Int a
+Num.bitwiseOr : Int a, Int a -> Int a
+Num.ceiling : Frac * -> Int *
+Num.compare : Num a, Num a -> [LT, EQ, GT]
+Num.cos : Frac a -> Frac a
+Num.div : Frac a, Frac a -> Frac a
+Num.divTrunc : Int a, Int a -> Int a
+Num.divTruncChecked : Int a, Int a -> Result (Int a) [DivByZero]
+Num.e : Frac *
+Num.intCast : Int a -> Int b
+Num.isApproxEq : Frac a, Frac a, { rtol ? Frac a, atol ? Frac a } -> Bool
+Num.isEven : Int a -> Bool
+Num.isMultipleOf : Int a, Int a -> Bool
+Num.max : Num a, Num a -> Num a
+Num.maxU64 : U64
+Num.min : Num a, Num a -> Num a
+Num.mul : Num a, Num a -> Num a
+Num.pow : Frac a, Frac a -> Frac a
+Num.powInt : Int a, Int a -> Int a
+Num.rem : Int a, Int a -> Int a
+Num.round : Frac * -> Int *
+Num.shiftLeftBy : Int a, U8 -> Int a
+Num.shiftRightZfBy : Int a, U8 -> Int a
+Num.sin : Frac a -> Frac a
+Num.sqrt : Frac a -> Frac a
+Num.subChecked : Num a, Num a -> Result (Num a) [Overflow]
+Num.subSaturated : Num a, Num a -> Num a
+Num.toF64 : Num * -> F64
+Num.toFrac : Num * -> Frac *
+Num.toI64 : Int * -> I64
+Num.toI8 : Int * -> I8
+Num.toStr : Num * -> Str
+Num.toU16 : Int * -> U16
+Num.toU32 : Int * -> U32
+Num.toU64 : Int * -> U64
+Num.toU64Checked : Int * -> Result U64 [OutOfBounds]
+Num.toU8 : Int * -> U8
+Result.isOk : Result ok err -> Bool
+Result.mapErr : Result ok a, (a -> b) -> Result ok b
+Result.onErr : Result a err, (err -> Result a otherErr) -> Result a otherErr
+Result.try : Result a err, (a -> Result b err) -> Result b err
+Result.withDefault : Result ok err, ok -> ok
+Result.map : Result a err, (a -> b) -> Result b err
+Result.map2 : Result a err, Result b err, (a, b -> c) -> Result c err
+Set.contains : Set k, k -> Bool
+Set.empty : {} -> Set *
+Set.fromList : List k -> Set k
+Set.insert : Set k, k -> Set k
+Set.intersection : Set k, Set k -> Set k
+Set.isEmpty : Set * -> Bool
+Set.keepIf : Set k, (k -> Bool) -> Set k
+Set.len : Set * -> U64
+Set.map : Set a, (a -> b) -> Set b
+Set.remove : Set k, k -> Set k
+Set.single : k -> Set k
+Set.toList : Set k -> List k
+Set.union : Set k, Set k -> Set k
+Set.walkUntil : Set k, state, (state, k -> [Continue state, Break state]) -> state
+Str.contains : Str, Str -> Bool
+Str.endsWith : Str, Str -> Bool
+Str.fromUtf8 : List U8 -> Result Str [BadUtf8 Utf8ByteProblem U64]
+Str.isEmpty : Str -> Bool
+Str.joinWith : List Str, Str -> Str
+Str.repeat : Str, U64 -> Str
+Str.replaceEach : Str, Str, Str -> Str
+Str.replaceFirst : Str, Str, Str -> Str
+Str.splitFirst : Str, Str -> Result { before : Str, after : Str } [NotFound]
+Str.splitOn : Str, Str -> List Str
+Str.startsWith : Str, Str -> Bool
+Str.toI16 : Str -> Result I16 [InvalidNumStr]
+Str.toI64 : Str -> Result I64 [InvalidNumStr]
+Str.toU32 : Str -> Result U32 [InvalidNumStr]
+Str.toU64 : Str -> Result U64 [InvalidNumStr]
+Str.toUtf8 : Str -> List U8
+Str.trim : Str -> Str
+Str.trimEnd : Str -> Str
+Task.map : Task a c, (a -> b) -> Task b c
+```
+
+Here's an example of FizzBuzz in Roc:
+```roc
+app [main] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br" }
+
+import pf.Stdout
+
+main =
+    List.range { start: At 1, end: At 100 }
+    |> List.map fizzBuzz
+    |> Str.joinWith ","
+    |> Stdout.line
+
+## Determine the FizzBuzz value for a given integer.
+## Returns "Fizz" for multiples of 3, "Buzz" for
+## multiples of 5, "FizzBuzz" for multiples of both
+## 3 and 5, and the original number for anything else.
+fizzBuzz : I32 -> Str
+fizzBuzz = \n ->
+    fizz = n % 3 == 0
+    buzz = n % 5 == 0
+
+    if fizz && buzz then
+        "FizzBuzz"
+    else if fizz then
+        "Fizz"
+    else if buzz then
+        "Buzz"
+    else
+        Num.toStr n
+
+## Test Case 1: not a multiple of 3 or 5
+expect
+    output = fizzBuzz 1
+    output == "1"
+expect
+    output = fizzBuzz 7
+    output == "7"
+
+## Test Case 2: multiple of 3
+expect
+    output = fizzBuzz 3
+    output == "Fizz"
+expect
+    output = fizzBuzz 9
+    output == "Fizz"
+
+## Test Case 3: multiple of 5
+expect
+    output = fizzBuzz 5
+    output == "Buzz"
+expect
+    output = fizzBuzz 20
+    output == "Buzz"
+
+## Test Case 4: multiple of both 3 and 5
+expect
+    output = fizzBuzz 15
+    output == "FizzBuzz"
+expect
+    output = fizzBuzz 45
+    output == "FizzBuzz"
+```
+
+# Puzzle
+
 Add a longest palindromic substring function to this Roc code, add tests using `expect`.
 That function should do the following:
 Given a string s, find the longest palindromic substring in s. A palindrome is a string that reads the same backward as forward.
 
-Roc instructions:
-- Do not use `Nat`, use a type like `U64` or `I64` instead.
-- Roc does not use `head :: tail`, use `[head, .. as tail]` instead. Make sure you do not forget the `as`!
-- Functions are defined like this: `increment = \n -> n + 1` 
-
-Extra instructions:
-- If the user provides you with an error, start your reply with an analysis of what could be going wrong paired with potential solutions. There is no need to provide an explanation after the code block.
-
-```
+```roc
 app [main] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br" }
 
 import pf.Stdout
@@ -18,5 +229,50 @@ import pf.Stdout
 main =
     Stdout.line! "Hello, World!"
 
-expect 5 == 5
+expect
+    myFive = 5
+    myFive == 5
+```
+
+Extra instructions:
+- If the user provides you with an error, start your reply with an analysis of what could be going wrong paired with potential solutions. There is no need to provide an explanation after the code block.
+- Always reply with the full code, no partial snippets with changes.
+- Do not use the Parser package.
+- String interpolation works like this: `"Two plus three is: $(Num.toStr (2 + 3))"`.
+- To get the length of a Str use `List.len (Str.toUtf8 someStr)`
+- Roc does not use `head :: tail`, use `[head, .. as tail]` instead. Make sure you do not forget the `as`!
+- Roc does not have currying.
+- You can not pattern match directly on booleans. Avoid using Bool.true and Bool.false in general, it is better to use descriptive tags, for example `HasNoExtraLine` and `HasExtraLine`.
+- Roc does not allow shadowing.
+- Make sure to avoid unused variables, types, or arguments.
+- Roc can hit an exhaustiveness bug in pattern matching where it says "Other possibilities include:" when in reality all possibilites are covered, if that bug happens include a branch like this:
+```
+_ -> crash "Roc bug, the previous branches actually are exhaustive."
+```
+- Use intermediary variables in your expect tests, all variables will be printed on failure, that will make debugging easier. Example:
+```
+expect 
+    part1Result = part1 exampleInput
+    part1Result == Ok "The sum is 161"
+```
+- You can use `dbg` for debugging, `dbg` does not work with intermediary variables like `expect`. Examples:
+```
+# standalone version
+dbg count
+
+# expression version
+if sum == 1 then
+    dbg (someFunction foo)
+else
+    someFunction bar
+```
+- Make sure to properly format variables of multiline strings. Example:
+```
+exampleInputPart1 =
+    """
+    1abc2
+    pqr3stu8vwx
+    a1b2c3d4e5f
+    treb7uchet
+    """
 ```
