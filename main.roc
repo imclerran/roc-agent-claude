@@ -1,5 +1,5 @@
-app [main] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.17.0/lZFLstMUCUvd5bjnnpYromZJXkQUrdhbva4xdBInicE.tar.br",
+app [main!] {
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.18.0/0APbwVN1_p1mJ96tXjaoiUCr8NBGamr8G8Ac_DrXR-o.tar.br",
     json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.11.0/z45Wzc-J39TLNweQUoLw3IGZtkQiEN3lTBv3BXErRjQ.tar.br",
 }
 
@@ -20,102 +20,119 @@ cmdOutputFile = "last_cmd_output.txt"
 
 claudeRocFile = "main_claude.roc"
 
-main =
-    rocVersionCheck!
+main! = \_args ->
+    try rocVersionCheck! {}
 
-    Task.loop { remainingClaudeCalls: 8, prompt: promptText, previousMessages: [] } loopClaude
+    try loopClaude! 8 promptText []
 
-loopClaude = \{ remainingClaudeCalls, prompt, previousMessages } ->
+    Ok {}
 
-    info! "Prompt:\n\n$(prompt)\n"
+loopClaude! = \remainingClaudeCalls, prompt, previousMessages ->
 
-    info! "Asking Claude...\n"
-    claudeAnswer = askClaude! prompt previousMessages
+    try info! "Prompt:\n\n$(prompt)\n"
 
-    info! "Claude's reply:\n\n$(claudeAnswer)\nEND\n\n"
+    try info! "Asking Claude...\n"
+    claudeAnswer = try askClaude! prompt previousMessages
+
+    try info! "Claude's reply:\n\n$(claudeAnswer)\nEND\n\n"
 
     codeBlockRes = extractMarkdownCodeBlock claudeAnswer
 
     when codeBlockRes is
         Ok codeBlock ->
-            File.writeUtf8! codeBlock claudeRocFile
+            try File.write_utf8! codeBlock claudeRocFile
 
-            info! "Running `roc check`...\n"
-            checkOutputResult = Task.result! executeRocCheck
+            try info! "Running `roc check`...\n"
+            checkOutputResult = executeRocCheck! {}
 
-            stripColorCodes!
-            checkOutput = File.readUtf8! cmdOutputFile
+            try stripColorCodes! {}
+            checkOutput = try File.read_utf8! cmdOutputFile
 
-            Stdout.line! "\n$(Inspect.toStr checkOutput)\n\n"
+            try Stdout.line! "\n$(Inspect.toStr checkOutput)\n\n"
 
             when checkOutputResult is
                 Ok {} ->
-                    info! "Running `roc test`...\n"
-                    testOutputResult = Task.result! executeRocTest
+                    try info! "Running `roc test`...\n"
+                    testOutputResult = executeRocTest! {}
 
-                    stripColorCodes!
-                    testOutput = File.readUtf8! cmdOutputFile
+                    try stripColorCodes! {}
+                    testOutput = try File.read_utf8! cmdOutputFile
 
                     when testOutputResult is
                         Ok {} ->
-                            Stdout.line! "\n$(Inspect.toStr testOutput)\n\n"
+                            try Stdout.line! "\n$(Inspect.toStr testOutput)\n\n"
 
-                            Task.ok (Done {})
+                            Ok {}
                         
                         Err e ->
-                            info! "`roc test` failed.\n"
+                            try info! "`roc test` failed.\n"
 
-                            Stderr.line! (Inspect.toStr e)
+                            try Stderr.line! (Inspect.toStr e)
 
-                            retry remainingClaudeCalls previousMessages prompt claudeAnswer testOutput
+                            retry! remainingClaudeCalls previousMessages prompt claudeAnswer testOutput
                 Err e ->
-                    info! "`roc check` failed.\n"
+                    try info! "`roc check` failed.\n"
 
-                    Stderr.line! (Inspect.toStr e)
+                    try Stderr.line! (Inspect.toStr e)
 
-                    retry remainingClaudeCalls previousMessages prompt claudeAnswer checkOutput
+                    retry! remainingClaudeCalls previousMessages prompt claudeAnswer checkOutput
 
 
         Err e ->
-            Task.err (ExtractMarkdownCodeBlockFailed (Inspect.toStr e))
+            Err (ExtractMarkdownCodeBlockFailed (Inspect.toStr e))
 
-retry = \remainingClaudeCalls, previousMessages, oldPrompt, claudeAnswer, newPrompt ->
+retry! = \remainingClaudeCalls, previousMessages, oldPrompt, claudeAnswer, newPrompt ->
     if remainingClaudeCalls > 0 then
         newPreviousMessages = List.concat previousMessages [{role: "user", content: oldPrompt}, {role: "assistant", content: claudeAnswer}]
 
-        Task.ok (Step {remainingClaudeCalls: (remainingClaudeCalls - 1), prompt: newPrompt, previousMessages: newPreviousMessages})
+        loopClaude! (remainingClaudeCalls - 1) newPrompt newPreviousMessages
     else
-        Task.err ReachedMaxClaudeCalls
+        Err ReachedMaxClaudeCalls
 
-rocVersionCheck : Task {} _
-rocVersionCheck =
-    info! "Checking if roc command is available; executing `roc version`:"
+rocVersionCheck! : {} => Result {} _
+rocVersionCheck! = \{} ->
+    try info! "Checking if roc command is available; executing `roc version`:" 
 
-    Cmd.exec "roc" ["version"]
-    |> Task.mapErr! RocVersionCheckFailed
+    Cmd.exec! "roc" ["version"]
+    |> Result.mapErr RocVersionCheckFailed
 
-executeRocCheck =
+executeRocCheck! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "-c"
         |> Cmd.arg """roc check main_claude.roc > last_cmd_output.txt 2>&1"""
     
-    Cmd.status bashCmd
+    cmd_exit_code = try Cmd.status! bashCmd
 
-executeRocTest =
+    if cmd_exit_code != 0 then
+        Err (StripColorCodesFailedWithExitCode cmd_exit_code)
+    else
+        Ok {}
+
+executeRocTest! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "-c"
         |> Cmd.arg """(timeout 2m roc test main_claude.roc > last_cmd_output.txt 2>&1 || { ret=$?; if [ $ret -eq 124 ]; then echo "'roc test' timed out after two minutes!" >> last_cmd_output.txt; fi; exit $ret; })"""
     
-    Cmd.status bashCmd
+    cmd_exit_code = try Cmd.status! bashCmd
 
-stripColorCodes =
+    if cmd_exit_code != 0 then
+        Err (StripColorCodesFailedWithExitCode cmd_exit_code)
+    else
+        Ok {}
+
+stripColorCodes! = \{} ->
     bashCmd =
         Cmd.new "bash"
         |> Cmd.arg "removeColorCodes.sh"
     
-    Cmd.status bashCmd
+    cmd_exit_code = try Cmd.status! bashCmd
+
+    if cmd_exit_code != 0 then
+        Err (StripColorCodesFailedWithExitCode cmd_exit_code)
+    else
+        Ok {}
 
 extractMarkdownCodeBlock = \text ->
     if !(Str.contains text "```roc") then
@@ -136,8 +153,8 @@ removeFirstLine = \str ->
     |> Str.joinWith "\n"
 
 
-askClaude : Str, List {role: Str, content: Str} -> Task Str _
-askClaude = \prompt, previousMessages ->
+askClaude! : Str, List {role: Str, content: Str} => Result Str _
+askClaude! = \prompt, previousMessages ->
     escapedPrompt = escapeStr prompt
 
     escapedPreviousMessages =
@@ -145,8 +162,9 @@ askClaude = \prompt, previousMessages ->
             { message & content: escapeStr message.content}
 
     apiKey =
-            Env.decode "ANTHROPIC_API_KEY"
-                |> Task.mapErr! \_ -> FailedToGetAPIKeyFromEnvVar
+            Env.decode! "ANTHROPIC_API_KEY"
+            |> Result.mapErr \_ -> FailedToGetAPIKeyFromEnvVar
+            |> try
 
     messagesToSend =
         List.append escapedPreviousMessages {role: "user", content: "$(escapedPrompt)"}
@@ -155,12 +173,11 @@ askClaude = \prompt, previousMessages ->
     request = {
         method: Post,
         headers: [
-            {key: "x-api-key", value: apiKey},
-            {key: "anthropic-version", value: "2023-06-01"},
-            {key: "content-type", value: "application/json"},
+            {name: "x-api-key", value: apiKey},
+            {name: "anthropic-version", value: "2023-06-01"},
+            {name: "content-type", value: "application/json"},
         ],
-        url: "https://api.anthropic.com/v1/messages",
-        mimeType: "application/json",
+        uri: "https://api.anthropic.com/v1/messages",
         # models "claude-3-5-sonnet-20241022" "claude-3-5-haiku-20241022"
         body: Str.toUtf8
             """
@@ -170,17 +187,16 @@ askClaude = \prompt, previousMessages ->
                 "messages": $(messagesToSend)
             }
             """,
-        timeout: TimeoutMilliseconds (5*60*1000),
+        timeout_ms: TimeoutMilliseconds (5*60*1000),
     }
 
-    sendResult =
-        Http.send request
-            |> Task.result!
+    response =
+        Http.send! request
 
-    processedSendResult =
-        Result.try sendResult Http.handleStringResponse
+    responseBody =
+        Str.fromUtf8 response.body
 
-    when processedSendResult is
+    when responseBody is
         Ok replyBody ->
             jsonDecoder = Json.utf8With { fieldNameMapping: SnakeCase }
 
@@ -190,13 +206,13 @@ askClaude = \prompt, previousMessages ->
             when decoded.result is
                 Ok claudeReply -> 
                     when List.first claudeReply.content is
-                        Ok firstContentElt -> Task.ok firstContentElt.text
-                        Err _ -> Task.err ClaudeReplyContentJsonFieldWasEmptyList
+                        Ok firstContentElt -> Ok firstContentElt.text
+                        Err _ -> Err ClaudeReplyContentJsonFieldWasEmptyList
 
-                Err e -> Task.err (ClaudeJsonDecodeFailed "Error:\n\tFailed to decode claude API reply into json: $(Inspect.toStr e)\n\n\tbody:\n\t\t$(replyBody)")
+                Err e -> Err (ClaudeJsonDecodeFailed "Error:\n\tFailed to decode claude API reply into json: $(Inspect.toStr e)\n\n\tbody:\n\t\t$(replyBody)")
 
         Err err ->
-            Task.err (ClaudeHTTPSendFailed err)
+            Err (ClaudeHTTPSendFailed err)
 
 messagesToStr : List {role: Str, content: Str} -> Str
 messagesToStr = \messages ->
@@ -221,7 +237,7 @@ ClaudeReply : {
     }
 }
 
-info = \msg ->
+info! = \msg ->
     Stdout.line! "\u(001b)[34mINFO:\u(001b)[0m $(msg)"
 
 escapeStr : Str -> Str

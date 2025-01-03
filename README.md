@@ -7,4 +7,13 @@
 
 LLM agent setup for Roc programming. Runs Claude in a loop until all tests pass.
 
-:bangbang: This lets Claude run code on your machine autonomously without restrictions. It is usually unlikely that Claude will screw something up on your machine, but use caution and make sure you don't copy paste a prompt from an untrusted source.
+:bangbang: This lets Claude run code on your machine autonomously without restrictions. It is unlikely that Claude will screw something up on your machine, but use caution and make sure you don't copy paste a prompt from an untrusted source.
+
+## Usage
+
+1. Get an [Anthropic API key](https://www.merge.dev/blog/anthropic-api-key)
+2. Run with:
+    ```
+    $ export ANTHROPIC_API_KEY=YOURAPIKEY
+    $ roc main.roc
+    ```
