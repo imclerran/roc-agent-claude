@@ -36,7 +36,7 @@ main! = |_args|
 loop_claude! = |remaining_claude_calls, prompt, client|
     info!("Prompt:\n\n${prompt}\n")?
     info!("Asking Claude...\n")?
-    with_claude_answer = try ask_claude!(prompt, client)
+    with_claude_answer = ask_claude!(prompt, client)?
     claude_answer =
         List.last(with_claude_answer.messages)
         |> Result.map_ok(.content)?
@@ -140,16 +140,13 @@ strip_color_codes! = |{}|
         Ok({})
 
 extract_markdown_code_block = |text|
-    if !(Str.contains(text, "```roc")) then
-        Err(NoRocCodeBlockInClaudeReply(text))
-    else
-        split_on_backticks_roc = Str.split_on(text, "```roc")
-        split_on_backticks =
-            List.get(split_on_backticks_roc, 1)?
-            |> Str.split_on("```")
-        when List.get(split_on_backticks, 0) is
-            Ok(code_block_dirty) -> Ok(remove_first_line(code_block_dirty))
-            Err(_) -> crash("This should be impossible due to previous if")
+    split_on_backticks_roc = Str.split_on(text, "```roc")
+    split_on_backticks =
+        List.get(split_on_backticks_roc, 1) ? |_| ErrNoRocCodeBlockInClaudeReply(text)
+        |> Str.split_on("```")
+    when List.get(split_on_backticks, 0) is
+        Ok(code_block_dirty) -> Ok(remove_first_line(code_block_dirty))
+        Err OutOfBounds -> crash("Impossible - Str.split_on always returns a list of at least one element")
 
 remove_first_line = |str|
     Str.split_on(str, "\n")
