@@ -53,14 +53,12 @@ loop_claude! = |remaining_claude_calls, prompt, client|
             strip_color_codes!({})?
             check_output = File.read_utf8!(cmd_output_file)?
             Stdout.line!("\n${Inspect.to_str(check_output)}\n\n")?
-
             when check_output_result is
                 Ok({}) ->
                     info!("Running `roc test`...\n")?
                     test_output_result = execute_roc_test!({})
                     strip_color_codes!({})?
                     test_output = File.read_utf8!(cmd_output_file)?
-
                     when test_output_result is
                         Ok({}) ->
                             Stdout.line!("\n${Inspect.to_str(test_output)}\n\n")
@@ -105,7 +103,6 @@ execute_roc_check! = |{}|
         Cmd.new("bash")
         |> Cmd.arg("-c")
         |> Cmd.arg("roc check main_claude.roc > last_cmd_output.txt 2>&1")
-
     cmd_exit_code = Cmd.status!(bash_cmd)?
     if cmd_exit_code != 0 then
         Err(StripColorCodesFailedWithExitCode(cmd_exit_code))
@@ -132,7 +129,6 @@ execute_roc_test! = |{}|
 roc_version_check! : {} => Result {} _
 roc_version_check! = |{}|
     info!("Checking if roc command is available; executing `roc version`:")?
-
     Cmd.exec!("roc", ["version"])
     |> Result.map_err(RocVersionCheckFailed)
 
@@ -140,7 +136,6 @@ strip_color_codes! = |{}|
     bash_cmd =
         Cmd.new("bash")
         |> Cmd.arg("removeColorCodes.sh")
-
     cmd_exit_code = Cmd.status!(bash_cmd)?
     if cmd_exit_code != 0 then
         Err(StripColorCodesFailedWithExitCode(cmd_exit_code))
@@ -155,7 +150,6 @@ extract_markdown_code_block = |text|
         split_on_backticks =
             List.get(split_on_backticks_roc, 1)?
             |> Str.split_on("```")
-
         when List.get(split_on_backticks, 0) is
             Ok(code_block_dirty) -> Ok(remove_first_line(code_block_dirty))
             Err(_) -> crash("This should be impossible due to previous if")
@@ -174,4 +168,3 @@ escape_str = |str|
     |> Str.replace_each("\n", "\\n")
     |> Str.replace_each("\t", "\\t")
     |> Str.replace_each("\"", "\\\"")
-
