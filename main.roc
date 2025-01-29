@@ -1,7 +1,8 @@
 app [main!] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.19.0/bi5zubJ-_Hva9vxxPq4kNx4WHX6oFs8OP6Ad0tCYlrY.tar.br",
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.19.0/Hj-J_zxz7V9YurCSTFcFdu6cQJie4guzsPMUi5kBYUk.tar.br",
     json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.12.0/1trwx8sltQ-e9Y2rOB4LWUWLS_sFVyETK8Twl0i9qpw.tar.gz",
-    ai: "https://github.com/imclerran/roc-ai/releases/download/v0.9.0/LIMYIvGIjaL4cbOXI6mgjV5pQEdNVE5w_G8ggz1uxGU.tar.br",
+    # ai: "https://github.com/imclerran/roc-ai/releases/download/v0.9.0/LIMYIvGIjaL4cbOXI6mgjV5pQEdNVE5w_G8ggz1uxGU.tar.br",
+    ai: "../roc-openrouter/package/main.roc",
 }
 
 import pf.Http
@@ -26,70 +27,52 @@ claude_max_requests = 8
 # - decent, cheap, fast: "claude-3-5-haiku-20241022"
 claude_model = "claude-3-5-sonnet-20241022"
 
-# http_request_timeout = 5 * 60 * 1000
+http_request_timeout = TimeoutMilliseconds (5 * 60 * 1000)
 
 main! = |_args|
-    try roc_version_check!({})
-
+    roc_version_check!({})?
     api_key = Env.var!("ANTHROPIC_API_KEY")?
-
-    client = Client.new({ api: Anthropic, model: claude_model, api_key, max_tokens: 8192 })
-
-    try loop_claude!(claude_max_requests, prompt_text, client)
-
-    Ok({})
+    client = Client.new({ api: Anthropic, model: claude_model, api_key, max_tokens: 8192, timeout_ms: http_request_timeout })
+    loop_claude!(claude_max_requests, prompt_text, client)
 
 loop_claude! = |remaining_claude_calls, prompt, client|
-
-    try info!("Prompt:\n\n${prompt}\n")
-
-    try info!("Asking Claude...\n")
+    info!("Prompt:\n\n${prompt}\n")?
+    info!("Asking Claude...\n")?
     with_claude_answer = try ask_claude!(prompt, client)
-
-    claude_answer = List.last(with_claude_answer.messages) |> Result.map_ok(.content)?
-
-    try info!("Claude's reply:\n\n${claude_answer}\nEND\n\n")
+    claude_answer = 
+        List.last(with_claude_answer.messages) 
+        |> Result.map_ok(.content)?
+    info!("Claude's reply:\n\n${claude_answer}\nEND\n\n")?
 
     code_block_res = extract_markdown_code_block(claude_answer)
-
     when code_block_res is
         Ok(code_block) ->
-            try File.write_utf8!(code_block, claude_roc_file)
-
-            try info!("Running `roc check`...\n")
+            File.write_utf8!(code_block, claude_roc_file)?
+            info!("Running `roc check`...\n")?
             check_output_result = execute_roc_check!({})
-
-            try strip_color_codes!({})
-            check_output = try File.read_utf8!(cmd_output_file)
-
-            try Stdout.line!("\n${Inspect.to_str(check_output)}\n\n")
+            strip_color_codes!({})?
+            check_output = File.read_utf8!(cmd_output_file)?
+            Stdout.line!("\n${Inspect.to_str(check_output)}\n\n")?
 
             when check_output_result is
                 Ok({}) ->
-                    try info!("Running `roc test`...\n")
+                    info!("Running `roc test`...\n")?
                     test_output_result = execute_roc_test!({})
-
-                    try strip_color_codes!({})
-                    test_output = try File.read_utf8!(cmd_output_file)
+                    strip_color_codes!({})?
+                    test_output = File.read_utf8!(cmd_output_file)?
 
                     when test_output_result is
                         Ok({}) ->
-                            try Stdout.line!("\n${Inspect.to_str(test_output)}\n\n")
-
-                            Ok({})
+                            Stdout.line!("\n${Inspect.to_str(test_output)}\n\n")
 
                         Err(e) ->
-                            try info!("`roc test` failed.\n")
-
-                            try Stderr.line!(Inspect.to_str(e))
-
+                            info!("`roc test` failed.\n")?
+                            Stderr.line!(Inspect.to_str(e))?
                             retry!(remaining_claude_calls, client, test_output)
 
                 Err(e) ->
-                    try info!("`roc check` failed.\n")
-
-                    try Stderr.line!(Inspect.to_str(e))
-
+                    info!("`roc check` failed.\n")?
+                    Stderr.line!(Inspect.to_str(e))?
                     retry!(remaining_claude_calls, client, check_output)
 
         Err(e) ->
@@ -98,20 +81,16 @@ loop_claude! = |remaining_claude_calls, prompt, client|
 ask_claude! : Str, Client => Result Client _
 ask_claude! = |prompt, client|
     escaped_prompt = escape_str(prompt)
-    with_prompt = Chat.append_user_message(client, escaped_prompt, {})
+    with_prompt = Chat.add_user_message(client, escaped_prompt, {})
     request = Chat.build_http_request(with_prompt, {})
-
-    response =
-        Http.send!(request)?
-
+    response = Http.send!(request) |> Result.map_err(|e| ClaudeHTTPSendFailed(e))?
     Chat.update_messages(client, response) 
         |> Result.map_err(|err|
             when err is
                 NoChoices -> ClaudeReplyContentJsonFieldWasEmptyList
-                BadJson str -> ClaudeJsonDecodeFailed("Error:\n\tFailed to decode claude API reply into json: {Inspect.to_str(e)}\n\n\tbody:\n\t\t${str}")
-                DecodingError -> ClaudeJsonDecodeFailed("Error:\n\tFailed to decode claude API reply into json: {Inspect.to_str(e)}\n\n\tbody:\n\t{response.body}")
-                HttpError e -> ClaudeHTTPSendFailed(e)
-                ApiError e -> ClaudeApiRquestFailed(e)
+                BadJson bad_json -> ClaudeJsonDecodeFailed("Error:\n\tFailed to decode claude API reply into json: \n\n\tbody:\n\t\t${bad_json}")
+                HttpError e -> ClaudeAPIequestFailed(e)
+                ApiError { code, message } -> ClaudeAPIRequestFailed({status: code, body: message}),
     )
 
 retry! = |remaining_claude_calls, client, new_prompt|
@@ -126,8 +105,7 @@ execute_roc_check! = |{}|
         |> Cmd.arg("-c")
         |> Cmd.arg("roc check main_claude.roc > last_cmd_output.txt 2>&1")
 
-    cmd_exit_code = try Cmd.status!(bash_cmd)
-
+    cmd_exit_code = Cmd.status!(bash_cmd)?
     if cmd_exit_code != 0 then
         Err(StripColorCodesFailedWithExitCode(cmd_exit_code))
     else
@@ -142,9 +120,7 @@ execute_roc_test! = |{}|
             (timeout 2m roc test main_claude.roc > last_cmd_output.txt 2>&1 || { ret=$?; if [ $ret -eq 124 ]; then echo "'roc test' timed out after two minutes!" >> last_cmd_output.txt; fi; exit $ret; })
             """,
         )
-
-    cmd_exit_code = try Cmd.status!(bash_cmd)
-
+    cmd_exit_code = Cmd.status!(bash_cmd)?
     if cmd_exit_code != 0 then
         Err(StripColorCodesFailedWithExitCode(cmd_exit_code))
     else
@@ -154,7 +130,7 @@ execute_roc_test! = |{}|
 
 roc_version_check! : {} => Result {} _
 roc_version_check! = |{}|
-    try info!("Checking if roc command is available; executing `roc version`:")
+    info!("Checking if roc command is available; executing `roc version`:")?
 
     Cmd.exec!("roc", ["version"])
     |> Result.map_err(RocVersionCheckFailed)
@@ -164,8 +140,7 @@ strip_color_codes! = |{}|
         Cmd.new("bash")
         |> Cmd.arg("removeColorCodes.sh")
 
-    cmd_exit_code = try Cmd.status!(bash_cmd)
-
+    cmd_exit_code = Cmd.status!(bash_cmd)?
     if cmd_exit_code != 0 then
         Err(StripColorCodesFailedWithExitCode(cmd_exit_code))
     else
