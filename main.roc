@@ -18,7 +18,6 @@ import "prompt-palindrome.txt" as prompt_text : Str
 
 # Output of `roc test` and `roc check` gets written to this file
 cmd_output_file = "last_cmd_output.txt"
-
 # Claude will write to this file and execute `roc check` and `roc test` on it
 claude_roc_file = "main_claude.roc"
 claude_max_requests = 8
@@ -26,7 +25,6 @@ claude_max_requests = 8
 # - smartest, expensive: "claude-3-5-sonnet-20241022"
 # - decent, cheap, fast: "claude-3-5-haiku-20241022"
 claude_model = "claude-3-5-sonnet-20241022"
-
 http_request_timeout = TimeoutMilliseconds (5 * 60 * 1000)
 
 main! = |_args|
@@ -43,7 +41,6 @@ loop_claude! = |remaining_claude_calls, prompt, client|
         List.last(with_claude_answer.messages)
         |> Result.map_ok(.content)?
     info!("Claude's reply:\n\n${claude_answer}\nEND\n\n")?
-
     code_block_res = extract_markdown_code_block(claude_answer)
     when code_block_res is
         Ok(code_block) ->
