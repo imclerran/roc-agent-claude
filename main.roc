@@ -39,8 +39,8 @@ loop_claude! = |remaining_claude_calls, prompt, client|
     info!("Prompt:\n\n${prompt}\n")?
     info!("Asking Claude...\n")?
     with_claude_answer = try ask_claude!(prompt, client)
-    claude_answer = 
-        List.last(with_claude_answer.messages) 
+    claude_answer =
+        List.last(with_claude_answer.messages)
         |> Result.map_ok(.content)?
     info!("Claude's reply:\n\n${claude_answer}\nEND\n\n")?
 
@@ -84,13 +84,14 @@ ask_claude! = |prompt, client|
     with_prompt = Chat.add_user_message(client, escaped_prompt, {})
     request = Chat.build_http_request(with_prompt, {})
     response = Http.send!(request) |> Result.map_err(|e| ClaudeHTTPSendFailed(e))?
-    Chat.update_messages(client, response) 
-        |> Result.map_err(|err|
+    Chat.update_messages(client, response)
+    |> Result.map_err(
+        |err|
             when err is
                 NoChoices -> ClaudeReplyContentJsonFieldWasEmptyList
                 BadJson bad_json -> ClaudeJsonDecodeFailed("Error:\n\tFailed to decode claude API reply into json: \n\n\tbody:\n\t\t${bad_json}")
                 HttpError e -> ClaudeAPIequestFailed(e)
-                ApiError { code, message } -> ClaudeAPIRequestFailed({status: code, body: message}),
+                ApiError { code, message } -> ClaudeAPIRequestFailed({ status: code, body: message }),
     )
 
 retry! = |remaining_claude_calls, client, new_prompt|
